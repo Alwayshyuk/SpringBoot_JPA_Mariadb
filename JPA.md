@@ -206,9 +206,9 @@ deleteByid()의 리턴 타입은 void이고 만일 해당 데이터가 존재하
 org.springframework.dao.EmptyResultDataAccessException 예외가 발생한다.     
 
 ## 페이징/정렬 처리하기
-JPA는 오라클의 인라인 뷰와 같은 처리를 내부적으로 Dialect라는 존재를 이용해서 처리한다.
-JPA가 실제 데이터베이스에서 사용하는 SQL의 처리를 자동으로 하기 때문에 개발자들은 SQL이 아닌      
-API의 객체와 메서드를 사용하는 형태로 페이징 처리를 할 수 있게 된다.    
+JPA는 오라클의 인라인 뷰와 같은 처리를 내부적으로 Dialect라는 존재를 이용해서 처리한다.        
+JPA가 실제 데이터베이스에서 사용하는 SQL의 처리를 자동으로 하기 때문에 개발자들은 SQL이 아닌        
+API의 객체와 메서드를 사용하는 형태로 페이징 처리를 할 수 있게 된다.      
 
 Spring Data JPA에서 페이징 처리와 정렬은 findAll()이라는 메서드를 사용한다.     
 findAll()은 JpaRepository 인터페이스의 상위인 PagingAndSortRepository의 메서드로     
@@ -340,7 +340,7 @@ public interface MemoRepository extends JpaRepository<Memo, Long> {
 
 ###### 쿼리 메서드와 Pageable의 결합     
 만일 목록을 원하는 쿼리를 실행해야 한다면 대부분의 경우 OrderBy 키워드 등을 사용해야 하기 때문에 메서드의 이름이 길어지고 혼동하기 쉽다.     
-다행히 쿼리 메서드는 Pageble 파라미터를 같이 결합해서 사용할 수 있기 때문에     
+다행히 쿼리 메서드는 Pageable 파라미터를 같이 결합해서 사용할 수 있기 때문에     
 정렬에 관련된 부분은 Pageable로 처리해서 좀더 간략한 메서드를 생성할 수 있다.     
 
 ```java
