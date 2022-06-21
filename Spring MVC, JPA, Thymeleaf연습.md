@@ -28,7 +28,7 @@
 
 위 구조를 처리하는데 있어서 각 계층 사이에는 데이터를 주고 받는 용도의 클래스를 이용하게 된다.     
 
-DTO -> GuestbookController -> DTO -> GuestbookServiceImpl -> Entity 객체 -> GuestRepository      
+DTO -> GuestbookController -> DTO -> GuestbookServiceImpl -> Entity 객체 -> GuestbookRepository      
 -> Entity 객체 -> GuestbookServiceImpl -> DTO -> GuestController -> DTO -> Thymeleaf page            
 
 - 브라우저에서 전달되는 Request는 GuestbookController에서 DTO의 형태로 처리된다.          
@@ -655,7 +655,7 @@ register()의 내부에서는 save()를 통해서 저장하고, 저장된 후에
 
 - 화면에서 필요한 목록 데이터에 대한 DTO 생성           
 - DTO를 Pageable 타입으로 전환            
-- Page<Entity>를 화면에서 사용하기 쉬운 DTO의 리스트 등으로 변환           
+- Page< Entity >를 화면에서 사용하기 쉬운 DTO의 리스트 등으로 변환           
 - 화면에 필요한 페이지 처리
 
 #### 목록 처리를 위한 DTO            
@@ -701,11 +701,11 @@ PageRequestDTO의 진짜 목적은 JPA쪽에서 사용하는 Pageable 타입의 
 정렬은 나중에 다양한 상황에서 사용하기 위해 별도의 파라미터를 받도록 설계했다.         
 
 ###### 페이지 결과 처리 DTO(PageResultDTO)              
-JPA를 이용하는 Repository에서는 페이지 처리 결과를 Page<Entity> 타입으로 반환하게 된다.          
+JPA를 이용하는 Repository에서는 페이지 처리 결과를 Page< Entity > 타입으로 반환하게 된다.          
 따라서 서비스 계층에서 이를 처리하기 위해서도 별도의 클래스를 만들어서 처리해야 한다.           
 처리하는 클래스는 크게 다음과 같은 내용이다.         
 
-- Page<Entity>의 엔티티 객체들을 DTO 객체로 변환해서 자료구조로 담아 주어야 한다.         
+- Page< Entity >의 엔티티 객체들을 DTO 객체로 변환해서 자료구조로 담아 주어야 한다.         
 - 화면 출력에 필요한 페이지 정보들을 구성해 주어야 한다.        
 
 이러한 작업을 위해 PageResultDTO는 임시로 다음과 같은 형태로 구성한다.       
@@ -726,14 +726,14 @@ public class PageResultDTO<DTO, EN> {
 ```
 
 PageResultDTO 클래스는 다양한 곳에서 사용할 수 있도록 제네릭 타입을 이용해서 DTO와 EN(Entity)이라는 타입을 지정한다.          
-PageResultDTO는 Page<Entity> 타입을 이용해서 생성할 수 있도록 생성자로 작성한다.       
-이때 특별한 Function<EN, DTO>는 엔티티 객체들을 DTO로 변환해 주는 기능이다.         
+PageResultDTO는 Page< Entity > 타입을 이용해서 생성할 수 있도록 생성자로 작성한다.       
+이때 특별한 Function< EN, DTO >는 엔티티 객체들을 DTO로 변환해 주는 기능이다.         
 
-위와 같은 구조를 이용하면 나중에 어떤 종류의 Page<E> 타입이 생성되더라도, PageResultDTO를 이용해서 처리할 수 있다는 장점이 있다.         
+위와 같은 구조를 이용하면 나중에 어떤 종류의 Page< E > 타입이 생성되더라도, PageResultDTO를 이용해서 처리할 수 있다는 장점이 있다.         
 프로젝트를 진행하는 과정에서는 다양한 종류의 엔티티를 다루기 때문에 위와 같은 제네릭 방식으로 적용해 두면      
 나중에 추가적인 클래스를 작성하지 않고도 목록 데이터를 처리할 수 있게 된다.          
 
-> PageResultDTO는 List<DTO> 타입으로 DTO 객체들을 보관한다. 그렇다면 Page<Entity>의 내용물 중에서 엔티티 객체를 DTO로 변환하는 기능이 필요하다.       
+> PageResultDTO는 List< DTO > 타입으로 DTO 객체들을 보관한다. 그렇다면 Page< Entity >의 내용물 중에서 엔티티 객체를 DTO로 변환하는 기능이 필요하다.       
 > 가장 일반적인 형태는 추상 클래스를 이용해서 이를 처리해야 하는 방식이지만 이 경우 매번 새로운 클래스가 필요하다는 단점이 있다.          
 > 여기서 엔티티 객체의 DTO 변환은 서비스 인터페이스에 정의한 메서드(entityToDto())와 별도로 Function 객체로 만들어서 처리한다.      
 
@@ -807,7 +807,7 @@ public class GuestbookServiceImpl  implements GuestbookService{
 ```
 
 getList()에서 눈여겨 볼 부부은 entityToDTO()를 이용해서 java.util.Function을 생성하고 이를 PageResultDTO로 구성하는 부분이다.          
-PageResultDTO에는 JPA의 처리 결과인 Page<Entity>와 Function을 전달해서 엔티티 객체들을 DTO의 리스트로 변환하고, 화면에 페이지 처리와 필요한 값들을 생성한다.        
+PageResultDTO에는 JPA의 처리 결과인 Page< Entity >와 Function을 전달해서 엔티티 객체들을 DTO의 리스트로 변환하고, 화면에 페이지 처리와 필요한 값들을 생성한다.        
 
 ###### 목록 처리 테스트       
 목록 처리 테스트는 우선적으로 엔티티 객체들이 DTO 객체들로 변환되었는지를 살펴본다.         
@@ -827,7 +827,7 @@ GuestbookServiceTests 추가
 ```
 PageRequestDTO를 이용하기 때문에 생성할 때는 1페이지부터 처리할 수 있고, 정렬은 상황에 맞게 Sort 객체를 생성해서 전달하는 형태로 사용한다.       
 
-테스트 결과를 보면 Page<Guestbook>이 List<GuestbookDTO>로 변환되어 출력 결과에 GuestbookDTO 타입으로 출력되는 것을 볼 수 있다.         
+테스트 결과를 보면 Page< Guestbook >이 List< GuestbookDTO >로 변환되어 출력 결과에 GuestbookDTO 타입으로 출력되는 것을 볼 수 있다.         
 
 ###### 목록 데이터 페이지 처리          
 화면까지 전달되는 데이터는 PageResultDTO이고, 이를 이용해서 화면에서는 페이지 처리를 진행하게 될 것이다.           
@@ -862,11 +862,11 @@ Math.ceil()은 소수점을 올림으로 처리하기 때문에 다음과 같은
 
 start = tempEnd-9;         
 
-끝 번호는 실제 마지막 페이지와 다시 비교할 필요가 있다. 예를 들어 Page<Guestbook>의 마지막 페이지가 33이라면      
-위의 계싼이라면 40이 되기 때문에 이를 반영해야 한다.         
-이를 위해서는 Page<Guestbook>의 getTotalPages()를 이용할 수 있다.            
+끝 번호는 실제 마지막 페이지와 다시 비교할 필요가 있다. 예를 들어 Page< Guestbook >의 마지막 페이지가 33이라면      
+위의 계산이라면 40이 되기 때문에 이를 반영해야 한다.         
+이를 위해서는 Page< Guestbook >의 getTotalPages()를 이용할 수 있다.            
 
-totalPage = result.getTotalPages();//result는 Page<Guestbook>           
+totalPage = result.getTotalPages();//result는 Page< Guestbook >           
 end = totalPage>tempEnd?tempEnd:totalPage;          
 
 이전prev과 다음next는 간단하게 구할 수 있다.     
@@ -1200,7 +1200,7 @@ list.html 일부
 ###### 등록 페이지의 링크와 조회 페이지 링크 처리            
 목록 페이지에서 마지막으로 남은 작업은 새로운 글을 작성할 수 있는 링크를 제공하는 것과         
 목록에 있는 각 글의 번호나 제목을 클릭했을 때 조회 페이지로 이동하는 작업이다.          
-등록 페이지로 가는 링크는 <table>의 위쪽에 버튼을 추가해 적용한다.          
+등록 페이지로 가는 링크는 < table >의 위쪽에 버튼을 추가해 적용한다.          
 
 ```html
 list.html 일부
@@ -1338,8 +1338,8 @@ read.html 에서는 dto라는 이름으로 전달된 DTO를 이용해서 글의 
 
 수정과 삭제의 모든 시작은 GET 방식으로 진입하는 수정화면에서 작업을 선택해서 처리하게 된다.      
 
-- Guestbook의 수정(1)은 POST 방식으로 처리하고 다시 수정된 결과를 확인할 수 있는 조회 화면으로 이동한다.       
-- 삭제(2)는 POST 방식으로 처리하고 목록 화면으로 이동한다.          
+- Guestbook의 수정은 POST 방식으로 처리하고 다시 수정된 결과를 확인할 수 있는 조회 화면으로 이동한다.       
+- 삭제는 POST 방식으로 처리하고 목록 화면으로 이동한다.          
 - 목록을 이동하는 작업은 GET 방식으로 처리한다. 이때 기존에 사용하던 페이지 번호 등을 유지해서 이동해야 한다.         
 
 방명록의 수정과 삭제를 구현할 때는 삭제 작업이 상대적으로 단순하므로 삭제를 먼저 처리하고 수정은 마지막에 처리한다.        
