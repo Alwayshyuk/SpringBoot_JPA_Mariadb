@@ -446,7 +446,7 @@ exLayout1.html
 작성된 코드를 보면 < div > 혹은 < th:block >을 이용해서 fragment1 파일에 있는 조각들을 사용하는 것을 볼 수 있다.      
 소스 코드에서 Layout1-2부분은 th:insert를 이용해서 th:replace와 비교한다.    
 
-생성된 코드를 보면 th:insert를 이용하는 경우에는 <div> 태그 내에 다시 <div> 태그가 생성된 것을 확인할 수 있다.     
+생성된 코드를 보면 th:insert를 이용하는 경우에는 < div > 태그 내에 다시 < div > 태그가 생성된 것을 확인할 수 있다.     
 th:replace를 이용할 때 :: 뒤에는 fragment의 이름을 지정하거나 CSS의 #id와 같은 선택자를 이용할 수 있다.     
 
 파일 전체를 사용하는 예제의 실습을 위해 fragments 폴더에 파일의 모든 내용이 하나의 조각이 되는 fragment2.html 파일을 작성한다.     
