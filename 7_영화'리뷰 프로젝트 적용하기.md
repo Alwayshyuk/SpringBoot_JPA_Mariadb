@@ -1,0 +1,1316 @@
+# 영화/리뷰 프로젝트 적용하기            
+
+여기서는 파일 업로드로 영화를 등록하고, 사용자들이 영화 리뷰를 기록하는 것을 작성한다.         
+
+- 영화의 등록과 수정에는 파일 업로드 기능을 활용해서 영화 포스터 등을 등록할 수 있도록 구성한다.        
+- 회원은 기존 회원들이 존재한다고 가정하고 데이터베이스에 존재하는 회원들을 이용한다.          
+- 회원은 특정한 영화 조회 페이지에서 평점과 자신의 감상을 리뷰로 기록할 수 있다.          
+- 조회 화면에서 회원은 자신이 기록한 리뷰의 내용을 수정/삭제할 수 있다.            
+
+## 영화 등록 처리        
+
+프로젝트를 구현하기 위해서는 이전에 다루었던 Thymeleaf 레이아웃 기능들을 활용해서 화면을 구성한다.           
+등록 화면은 이미지를 선택하면 자동으로 업로드되고, 섬네일 이미지들을 출력한다.      
+이후 Submit 버튼을 클릭해서 데이터베이스에 추가하게 된다.          
+
+화면 구성을 위해 이전 프로젝트의 resources 폴더 내에 static 폴더를 복사해서 프로젝트에 추가한다.       
+Templates 폴더에는 layout 폴더를 복사해서 추가한다.         
+
+controller 패키지에는 MovieController 클래스를 추가하고 영화 등록에 사용할 /movie/register를 추가한다.         
+
+```java
+@Controller
+@RequestMapping("/movie")
+@Log4j2
+public class MovieController {
+
+    @GetMapping("/register")
+    public void register(){
+        
+    }
+}
+```
+
+templates 폴더에 movie 폴더를 추가하고, register.html을 작성한다.          
+
+register.html은 레이아웃을 적용한 구조로 작성하고 내부에 < form > 태그를 이용해서 영화 데이터를 등록할 수 있도록 구성한다.         
+
+```html
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<th:block th:replace="~{/layout/basic :: setContent(~{this::content})}">
+    <th:block th:fragment="content">
+        <h1 class="mt-4">Movie Register Page</h1>
+
+        <form th:action="@{/movie/register}" th:method="post">
+            <div class="form-group">
+                <label>Title</label>
+                <input type="text" class="form-control" name="title" placeholder="Enter Title">
+            </div>
+
+            <div class="form-group fileForm">
+                <label>Image Files</label>
+                <div class="custom-file">
+                    <input type="file" class="custom-file-input files" id="fileInput" multiple>
+                    <label class="custom-file-label" data-browse="Browse"></label>
+                </div>
+            </div>
+            <div class="box">
+
+            </div>
+            <button type="submit" class="btn btn-primary">Submit</button>
+        </form>
+        <script>
+            $(document).ready(function(e){
+            
+            });
+        </script>
+    </th:block>
+</th:block>
+```
+
+프로젝트를 실행하고 브라우저를 통해 /movie/register 입력 화면에 문제가 없는지 확인한다.        
+
+#### MovieDTO/MovieImageDTO 클래스와 MovieService              
+
+영화와 관련해서는 이미 엔티티 클래스의 처리가 완료되었기 때문에 DTO와 서비스 계층을 구성해 주는 작업만 처리한다.          
+MovieDTO는 Movie 클래스를 기준으로 작성한다.          
+MovieDTO 클래스의 내부에는 업로드된 파일들의 정보를 포함해야 하므로 MovieImageDTO 클래스도 같이 추가한다.          
+
+```java
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class MovieDTO {
+    private Long mno;
+    private String title;
+
+    @Builder.Default
+    private List<MovieImageDTO> imageDTOList = new ArrayList<>();
+}
+```
+
+MovieDTO는 화면에 영화 이미지들도 같이 수집해서 전달해야 하므로 내부적으로 리스트를 이용해서 수집한다.        
+
+```java
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+public class MovieImageDTO {
+    private String uuid, imgName, path;
+
+    public String getImageURL(){
+        try {
+            return URLEncoder.encode(path+"/"+uuid+"_"+imgName,"UTF-8");
+        }catch (UnsupportedEncodingException e){
+            e.printStackTrace();
+        }
+        return "";
+    }
+    public String getThumbnailURL(){
+        try {
+            return URLEncoder.encode(path+"/s_"+uuid+"_"+imgName,"UTF-8");
+        }catch (UnsupportedEncodingException e){
+            e.printStackTrace();
+        }
+        return "";
+    }
+}
+```
+
+영화의 이미지를 의미하는 MovieImageDTO는 이전의 UploadResultDTO와 동일하다.         
+getImageURL()과 getThumbnailURL()은 나중에 Thymeleaf로 출력해서 사용할 것이다.        
+프로젝트 내에 service 패키지를 추가하고 MovieService 인터페이스와 MoviceServiceImpl 클래스를 추가한다.           
+
+```java
+public interface MovieService {
+    Long register(MovieDTO movieDTO);
+
+    default Map<String, Object> dtoToEntity(MovieDTO movieDTO){
+        Map<String, Object> entityMap = new HashMap<>();
+
+        Movie movie = Movie.builder()
+                .mno(movieDTO.getMno())
+                .title(movieDTO.getTitle())
+                .build();
+
+        entityMap.put("movie", movie);
+
+        List<MovieImageDTO> imageDTOList = movieDTO.getImageDTOList();
+
+        if(imageDTOList != null && imageDTOList.size()>0){
+            List<MovieImage> movieImageList = imageDTOList.stream().map(movieImageDTO -> {
+               MovieImage movieImage = MovieImage.builder()
+                       .path(movieImageDTO.getPath())
+                       .imgName(movieImageDTO.getImgName())
+                       .uuid(movieImageDTO.getUuid())
+                       .movie(movie)
+                       .build();
+               return movieImage;
+            }).collect(Collectors.toList());
+            entityMap.put("imgList", movieImageList);
+        }
+        return entityMap;
+    }
+}
+```
+
+추가된 dtoToEntity()는 Map 타입으로 Movie 객체와 MovieImage 객체의 리스트를 처리한다.         
+
+```java
+@Service
+@Log4j2
+@RequiredArgsConstructor
+public class MovieServiceImpl implements MovieService {
+    private final MovieRepository movieRepository;
+    private final MovieImageRepository imageRepository;
+
+    @Transactional
+    @Override
+    public Long register(MovieDTO movieDTO){
+        Map<String, Object> entityMap = dtoToEntity(movieDTO);
+        Movie movie = (Movie) entityMap.get("movie");
+        List<MovieImage> movieImageList = (List<MovieImage>) entityMap.get("imgList");
+
+        movieRepository.save(movie);
+
+        movieImageList.forEach(movieImage -> {
+            imageRepository.save(movieImage);
+        });
+
+        return movie.getMno();
+    }
+}
+```
+
+MovieServiceImpl은 MovieRepository와 MovieImageRepository를 주입받도록 구성하고,                
+dtoToEntity()에서 반환한 객체들을 이용해서 save()를 처리한다.          
+
+#### MovieController와 화면 처리          
+
+MovieController에서는 POST 방식으로 전달된 파라미터들을 MovieDTO로 수집해서 MovieService 타입 객체의 register()를 호출하도록 작성한다.          
+
+```java
+@Controller
+@RequestMapping("/movie")
+@Log4j2
+@RequiredArgsConstructor
+public class MovieController {
+
+    private final MovieService movieService;
+
+    @GetMapping("/register")
+    public void register(){
+    }
+
+    @PostMapping("/register")
+    public String register(MovieDTO movieDTO, RedirectAttributes redirectAttributes){
+        log.info("movieDTO: "+movieDTO);
+
+        Long mno = movieService.register(movieDTO);
+
+        redirectAttributes.addFlashAttribute("msg", mno);
+
+        return "redirect:/movie/list";
+    }
+}
+```
+
+영화가 등록된 후에는 목록 페이지로 이동해야 하는데 이에 대한 구현은 조금 뒤로 미루고 먼저 화면을 개발한다.          
+
+##### 첨부파일을 보여주는 영역 처리하기          
+화면에서 가장 먼저 처리할 것은 첨부파일을 업로드하는 것이다.     
+이 과정에서 업로드된 파일을 화면에 보여주는 부분도 같이 처리해 주어야 한다.           
+register.html에서 파일 업로드를 하는 부분의 클래스는 custom-file-input 이므로 이를 이용해서 이벤트를 처리한다.        
+화면에서 첨부파일의 업로드는 별도의 버튼 없이 파일을 선택하면 자동으로 이루어지도록 하기 위해서 change 이벤트를 처리한다.           
+
+```html
+register.html 파일 일부
+
+        <script>
+            $(document).ready(function(e){
+                var regex = new RegExp("(.*?)\.(exe|sh|zip|alz|tiff)$");
+                var maxSize = 10485760;
+
+                function checkExtension(fileName, fileSize){
+                    if(fileSize>=maxSize){
+                        alter("파일 사이즈 초과");
+                        return false;
+                    }
+
+                    if(regex.test(fileName)){
+                        alter("해당 종류의 파일은 업로드할 수 없습니다.");
+                        return false;
+                    }
+                    return true;
+                }
+
+                $(".custom-file-input").on("change", function(){
+                    var fileName = $(this).val().split("\\").pop();
+                    $(this).siblings(".custom-file-label").addClass("selected").html(fileName);
+
+                    var formData = new FormData();
+
+                    var inputFile = $(this);
+
+                    var files = inputFile[0].files;
+
+                    var appended = false;
+
+                    for(var i = 0; i<files.length; i++){
+                        if(!checkExtension(files[i].name, files[i].size)){
+                            return false;
+                        }
+                        console.log(files[i]);
+                        formData.append("uploadFiles",files[i]);
+                        appended = true;
+                    }
+
+                    if(!appended){return;}
+
+                    for(var value of formData.values()){
+                        console.log(value);
+                    }
+
+                    $.ajax({
+                        url: '/uploadAjax',
+                        processData: false,
+                        contentType: false,
+                        data: formData,
+                        type: 'POST',
+                        dataType: 'json',
+                        success: function(result){
+                            console.log(result);
+                            showResult(result);
+                        },
+                        error:function(jqXHR, textStatus, errorThrown){
+                            console.log(textStatus);
+                        }
+                    });
+                });
+            });
+        </script>
+```
+
+기존의 예제와 동일한 형태로 구성했지만 중간에 첨부파일의 확장자를 체크하는 부분을 추가하는 것이 필요하다.             
+위의 코드를 적용하고 화면에서 이미지들을 선택하면 콘솔창을 통해서 JSON으로 업로드 결과를 알 수 있다.           
+
+업로드가 정상적으로 처리된 후에는 화면에서 섬네일 이미지를 보여줄 영역을 이용해서 섬네일을 추가해 주어야 한다.           
+register.html의 < form > 태그 아래쪽에 다음과 같은 스타일과 < div >를 추가한다.         
+
+```html
+register.html 파일 일부
+
+        <style>
+            .uploadResult{
+                width:100%;
+                background-color:gray;
+                margin-top:10px;
+            }
+            .uploadResult ul{
+                display: flex;
+                flex-flow: row;
+                justify-content: center;
+                align-items: center;
+                vertical-align: top;
+                overflow: auto;
+            }
+            .uploadResult ul li {
+                list-style: none;
+                padding: 10px;
+                margin-left: 2em;
+            }
+            .uploadResult ul li img{
+                width: 100px;
+            }
+        </style>
+        <div class="uploadResult">
+
+        </div>
+```
+
+Ajax의 호출 결과는 showResult()라는 별도의 함수로 처리한다.       
+아래의 코드를 추가하고 Ajax에서 결과 데이터를 가져오면 showResult()를 호출하도록 수정한다.          
+
+```html
+            function showResult(uploadResultArr){
+
+                var uploadUL = $(".uploadResult ul");
+
+                var str ="";
+
+                $(uploadResultArr).each(function(i, obj) {
+
+                    str += "<li data-name='" + obj.fileName + "' data-path='"+obj.folderPath+"' data-uuid='"+obj.uuid+"'>";
+                    str + " <div>";
+                    str += "<button type='button' data-file=\'" + obj.imageURL + "\' "
+                    str += "class='btn-warning btn-sm'>X</button><br>";
+                    str += "<img src='/display?fileName=" + obj.thumbnailURL + "'>";
+                    str += "</div>";
+                    str + "</li>";
+                });
+
+                uploadUL.append(str);
+            }
+```
+
+이제 브라우저에서는 이미지를 선택하는 경우에 파일들이 자동으로 업로드되고 화면에 보이게 된다.          
+
+각 이미지는 < li > 태그로 구성되는데 이때 ImageDTO에 필요한 속성들을 구성하게 된다.            
+
+< li > 태그의 data- 속성들은 < form > 태그의 submit이 실행될 때 < form > 태그의 내용물로 만들어서 전송한다.        
+
+##### 이미지 파일의 삭제와 submit 처리         
+
+이미지 파일의 삭제는 앞쪽에서 한 번 다뤄본 적이 있으므로 유사하게 처리하면 된다.        
+달라지는 것은 < div > 가 아니라 < li > 태그라는 점 정도이다.         
+
+```html
+            $(".uploadResult").on("click", "li button", function(e){
+                console.log("delete file");
+                var targetFile = $(this).data("file");
+                var targetLi = $(this).closest("li");
+                $.ajax({
+                    url:'/removeFile',
+                    data:{fileName:targetFile},
+                    dataType:'text',
+                    type:'POST',
+                    success: function(result){
+                        alert(result);
+                        targetLi.remove();
+                    }
+                });
+            });
+```
+
+위의  코드를 적용하면 화면에서 업로드된 파일들의 x 버튼을 클릭해서 실제 서버에서도 섬네일과 원본 파일을 같이 삭제하게 된다.          
+
+화면에서 Submit 버튼을 클릭하면 다음과 같은 작업을 처리한다.        
+- 각 이미지 < li > 태그의 data- 속성들을 읽어 낸다.           
+- 읽어 들인 속성값을 이용해서 < form > 태그 내에 < input type='hidden' > 태그들을 생성한다.            
+- < input type='hidden' > 의 이름에는 imageDTOList[ 0 ]과 같이 인덱스 번호를 붙여서 처리한다.           
+
+각 이미지를 < input type='hidden' > 태그로 구성하고 imageDTOList[ 0 ]과 같이 구성하면          
+나중에 MovieDTO로 데이터를 수집할 때 자동으로 리스트로 변환되어서 처리할 수 있기 때문이다.           
+
+```html
+            $(".btn-primary").on("click",function(e){
+                e.preventDefault();
+                var strr = "";
+                $(".uploadResult li").each(function(i,obj){
+                    var target = $(obj);
+
+                    strr+="<input type='hidden' name='imageDTOList["+i+"].imgName'value='"+target.data('name')+"'>";
+                    strr+="<input type='hidden' name='imageDTOList["+i+"].path'value='"+target.data('path')+"'>";
+                    strr+="<input type='hidden' name='imageDTOList["+i+"].uuid'value='"+target.data('uuid')+"'>";
+                });
+
+                $(".box").html(strr);
+
+                //$("form").submit();
+            });
+```
+
+마지막의 submit()은 주석 처리되어 있으므로 실제 서버를 호출하지는 않지만,       
+Submit을 클릭하면 < form > 태그 안에 있는 < div class='box' > 내에 hidden 타입의 태그들을 만들게 된다.              
+만들어지는 태그들은 화면에 보이는 이미지들에 대해서 순번대로 만들어 진다.          
+중간에 이미지를 넣거나 삭제해도 화면의 순서대로 < input type='hidden' > 태그를 만들게 된다.            
+위와 같이 브라우저에서 정상적으로 모든 내용이 만들어진 이후에 최종적으로 submit()을 실행하면 브라우저에서는 아직 목록 페이지가 없으므로          
+에러가 발생하지만 데이터베이스에는 정상적으로 추가된 것을 확인할 수 있다.             
+
+전체 과정을 보면 다음과 같은 흐름이다.         
+1. 파일 업로드가 되면 < li > 태그가 구성된다.            
+2. Submit 버튼을 클릭하면 < form > 태그 내에 태그들이 생성된다.             
+3. MovieController에서 POST 방식으로 전달된 데이터는 MovieImageDTO로 수집된다.           
+4. MovieService에서 MovieImageDTO들은 Movie 엔티티 객체 내에 MovieImage로 처리된다.            
+5. JPA에 의해서 save() 처리 후에 데이터베이스에 기록된다.            
+
+## 목록 처리와 평균 평점           
+
+등록 처리가 완료되었다면 목록 페이지를 제작한다.       
+목록 페이지에는 영화의 제목과 이미지 평균 평점을 화면에 출력해야 한다.               
+화면에 목록과 페이지 처리를 위해서는 이전에 사용했던 PageRequestDTO와 PageResultDTO를 dto 패키지에 추가한다.            
+
+#### MovieService와 MovieServiceImpl               
+
+영화와 평점 데이터는 MovieRepository에서 이미 처리해 두었기 때문에 이를 이용하는 MovieService와 MovicServiceImpl 클래스를 수정한다.          
+MovieRepository 인터페이스의 getListPage() 메서드는 Movie 객체와 MovieImage 객체 하나,              
+double 값으로 나오는 영화의 평균 평점/Long 타입의 리뷰 개수를 Object[]로 반환한다.           
+
+##### MovieDTO 수정          
+
+MovieService의 getList()는 Movie, MovieImage, Double, Long을 Object[] 배열의 리스트에 담은 형태이다.             
+각 Object[]을 MovieDTO라는 하나의 객체로 처리해야만 한다.           
+MovieDTO에는 Double 타입의 평점 평균과 리뷰의 개수를 처리하는 파라미터를 추가한다. 또한, 날짜와 관련된 부분도 같이 추가한다.           
+
+```java
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class MovieDTO {
+    private Long mno;
+    private String title;
+
+    @Builder.Default
+    private List<MovieImageDTO> imageDTOList = new ArrayList<>();
+
+    private double avg;
+    private int reviewCnt;
+
+    private LocalDateTime regDate, modDate;
+    
+}
+```
+
+##### MovieService의 엔티티 변환          
+
+MovieService에는 JPA를 통해서 나오는 엔티티 객체들과 Double, Long 등의 값을 MovieDTO로 변환하는 entitiesToDto()를 추가하고,        
+컨트롤러가 호출할 때 사용할 getList()를 추가한다.          
+
+```java
+
+public interface MovieService {
+    Long register(MovieDTO movieDTO);
+
+    PageResultDTO<MovieDTO, Object[]> getList(PageRequestDTO requestDTO);
+    
+    default MovieDTO entitiesToDTO(Movie movie, List<MovieImage> movieImages, Double avg, Long reviewCnt){
+        MovieDTO movieDTO = MovieDTO.builder()
+                .mno(movie.getMno())
+                .title(movie.getTitle())
+                .regDate(movie.getRegDate())
+                .modDate(movie.getModDate())
+                .build();
+        
+        List<MovieImageDTO> movieImageDTOList = movieImages.stream().map(movieImage -> {
+            return MovieImageDTO.builder().imgName(movieImage.getImgName())
+                    .path(movieImage.getPath())
+                    .uuid(movieImage.getUuid())
+                    .build();
+        }).collect(Collectors.toList());
+        
+        movieDTO.setImageDTOList(movieImageDTOList);
+        movieDTO.setAvg(avg);
+        movieDTO.setReviewCnt(reviewCnt.intValue());
+        
+        return movieDTO;
+    }
+    default Map<String, Object> dtoToEntity(MovieDTO movieDTO){
+        Map<String, Object> entityMap = new HashMap<>();
+
+        Movie movie = Movie.builder()
+                .mno(movieDTO.getMno())
+                .title(movieDTO.getTitle())
+                .build();
+
+        entityMap.put("movie", movie);
+
+        List<MovieImageDTO> imageDTOList = movieDTO.getImageDTOList();
+
+        if(imageDTOList != null && imageDTOList.size()>0){
+            List<MovieImage> movieImageList = imageDTOList.stream().map(movieImageDTO -> {
+               MovieImage movieImage = MovieImage.builder()
+                       .path(movieImageDTO.getPath())
+                       .imgName(movieImageDTO.getImgName())
+                       .uuid(movieImageDTO.getUuid())
+                       .movie(movie)
+                       .build();
+               return movieImage;
+            }).collect(Collectors.toList());
+            entityMap.put("imgList", movieImageList);
+        }
+        return entityMap;
+    }
+}
+```
+
+추가된 entitiesToDTO()는 다음과 같은 파라미터들을 받는다.         
+- movie 엔티티         
+- List< MovieImage > 엔티티 - 굳이 리스트로 받은 이유는 조회 화면에서 여러 개의 MovieImage를 처리하기 위함이다.           
+- Double 타입의 평점 평균           
+- Long 타입의 리뷰 개수          
+
+MovieServiceImpl 클래스에서는 getList() 메서드를 구현한다.            
+
+```java
+MovieServiceImpl 클래스 일부
+
+    @Override
+    public PageResultDTO<MovieDTO, Object[]> getList(PageRequestDTO requestDTO) {
+        Pageable pageable = requestDTO.getPageable(Sort.by("mno").descending());
+        Page<Object[]> result = movieRepository.getListPage(pageable);
+
+        Function<Object[], MovieDTO> fn = (arr -> entitiesToDTO(
+        (Movie)arr[0],
+        (List<MovieImage>)(Arrays.asList((MovieImage)arr[1])),
+        (Double) arr[2],
+        (Long) arr[3]
+        ));
+
+        return new PageResultDTO<>(result,fn);
+    }
+```
+
+#### 목록 화면과 MovieController 처리          
+MovieController에는 list() 메서드를 추가한다.          
+
+```java
+MovieController 클래스 일부
+
+    @GetMapping("/list")
+    public void list(PageRequestDTO pageRequestDTO, Model model){
+        log.info("pageRequestDTO: "+pageRequestDTO);
+        model.addAttribute("result", movieService.getList(pageRequestDTO));
+    }
+```
+
+templates의 movie 폴더에는 list.html을 다음과 같이 작성한다.         
+
+```html
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+
+<th:block th:replace="~{/layout/basic :: setContent(~{this::content})}">
+    <th:block th:fragment="content">
+        <h1 class="mt-4">Movie List Page
+            <span>
+                <a th:href="@{/movie/register}">
+                    <button type="button" class="btn btn-outline-primary">REGISTER</button>
+                </a>
+            </span>
+        </h1>
+        <form action="/movie/list" method="get" id="searchForm">
+            <input type="hidden" name="page" value="1">
+        </form>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">Title & Picture</th>
+                    <th scope="col">Review Count</th>
+                    <th scope="col">AVG Rating</th>
+                    <th scope="col">Regdate</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        <script th:inline="javascript">
+        </script>
+    </th:block>
+</th:block>
+```
+
+##### 목록 데이터 출력하기          
+
+목록에 출력하는 데이터는 Model에 담겨있으므로 이를 이용해서 출력한다.         
+
+```html
+list.html 일부
+
+<table class="table table-striped">
+    <thead>
+    <tr>
+        <th scope="col">#</th>
+        <th scope="col">Title & Picture</th>
+        <th scope="col">Review Count</th>
+        <th scope="col">AVG Rating</th>
+        <th scope="col">Regdate</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="dto:${result.dtoList}">
+        <th scope="row">
+            <a th:href="@{/movie/read(mno=${dto.mno}, page=${result.page})}">
+                [[${dto.mno}]]
+            </a>
+        </th>
+        <td><img th:if="${dto.imageDTOList.size()>0&&dto.imageDTOList[0].path!=null}"
+                 th:src="|/display?fileName=${dto.imageDTOList[0].getThumbnailURL()}|">
+            [[${dto.title}]]
+        </td>
+        <td><b>[[${dto.reviewCnt}]]</b></td>
+        <td><b>[[${dto.avg}]]</b></td>
+        <td>[[${#temporals.format(dto.regDate, 'yyyy/MM/dd')}]]</td>
+    </tr>
+    </tbody>
+</table>
+```
+
+영화 이미지는 imageDTOList의 크기가 0보다 크고 path 속성에 값이 있는 실제 이미지가 존재할 때만 < img > 태그를 생성한다.       
+화면에 페이지를 출력하는 부분은 이전과 동일하다. < table > 태그가 끝난 부분에 아래의 코드를 추가한다.           
+
+```html
+list.html 일부
+
+<ul class="pagenation h-100 justify-content-center align-items-center">
+    <li class="page-item" th:if="${result.prev}">
+        <a class="page-link" th:href="@{/movie/list(page=${result.start-1})}" tabindex="-1">Previous</a>
+    </li>
+    <li th:class=" 'page-item' + ${result.page == page? 'active':''}"
+        th:each="page:${result.pageList}">
+        <a class="page-link" th:href="@{/movie/list(page=${page})}">
+            [[${page}]]
+        </a>
+    </li>
+    <li class="page-item" th:if="${result.next}">
+        <a class="page-link" th:href="@{/movie/list(page=${result.end+1})}">Next</a>
+    </li>
+</ul>
+```
+
+화면에서 페이지 번호가 출력되는 것을 볼 수 있고 실제 페이지의 이동도 가능하다.
+
+## 조회 페이지와 영화 리뷰            
+
+조회 페이지는 실제 영화 리뷰가 진행되는 공간이므로 많은 기능이 추가되어야 한다.           
+영화 리뷰와 관련된 기능은 Ajax로 처리해서 작성한다.              
+조회 페이지는 목록 페이지에서 영화의 번호를 클릭하면 이동하는 /movie/read URL을 처리해야 한다.           
+
+#### MovieService와 MovieServiceImpl          
+MovieService에는 특정한 영화의 번호를 이용해서 MovieDTO를 반환하는 기능을 정의하고, MovieServiceImpl에서 이를 구현한다.           
+
+```java
+public interface MovieService {
+    
+    //나머지 코드 생략
+    MovieDTO getMovie(Long mno);
+}
+```
+
+MovieServiceImpl에서 MovieDTO를 만들어 내기 위해서는 MovieRepository에서 가져오는          
+Movie, MovieImage 리스트, 평점 평균, 리뷰 개수의 리스트를 가공할 필요가 있다.          
+
+```
+//MovieRepository의 getMovieWithAll()의 결과는 List<Object[]>
+List<Object[]> result = movieRepository.getMovieWithAll(71L);
+
+MovieImage가 2개인 경우는 리스트내에 2개 요소
+```
+
+```java
+MovieServiceImpl 클래스 일부
+
+    @Override
+    public MovieDTO getMovie(Long mno) {
+        List<Object[]> result = movieRepository.getMovieWithAll(mno);
+
+        Movie movie = (Movie) result.get(0)[0];
+
+        List<MovieImage> movieImageList = new ArrayList<>();
+
+        result.forEach(arr->{
+            MovieImage movieImage = (MovieImage) arr[1];
+            movieImageList.add(movieImage);
+        });
+        Double avg = (Double) result.get(0)[2];
+        Long reviewCnt = (Long)result.get(0)[3];
+
+        return entitiesToDTO(movie,movieImageList,avg,reviewCnt);
+    }
+```
+
+##### MovieController와 read.html           
+
+MovieController는 GET 방식으로 /movie/read?mno=xxx와 같은 URL을 처리한다. 수정 작업에도 동일한 코드가 사용된다.          
+
+```java
+MovieController 클래스 일부
+
+    @GetMapping({"/read", "/modify"})
+    public void read(long mno, @ModelAttribute("requestDTO") PageRequestDTO requestDTO, Model model){
+        log.info("mno: "+mno);
+
+        MovieDTO movieDTO = movieService.getMovie(mno);
+
+        model.addAttribute("dto", movieDTO);
+    }
+```
+
+실제 화면은 read.html을 작성해서 처리한다.        
+
+```html
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<th:block th:replace="~{/layout/basic :: setContent(~{this::content})}">
+  <th:block th:fragment="content">
+      <h1 class="mt-4">Movie Read Page</h1>
+
+      <div class="form-group">
+          <label>Title</label>
+          <input type="text" class="form-control" name="title" th:value="${dto.title}" readonly>
+      </div>
+      <div class="form-group">
+          <label>Review Count</label>
+          <input type="text" class="form-control" name="title" th:value="${dto.reviewCnt}" readonly>
+      </div>
+      <div class="form-group">
+          <label>Avg</label>
+          <input type="text" class="form-control" name="title" th:value="${dto.avg}" readonly>
+      </div>
+      <style>
+            .uploadResult {
+                width: 100%;
+                background-color: gray;
+                margin-top: 10px;
+            }
+
+            .uploadResult ul {
+                display: flex;
+                flex-flow: row;
+                justify-content: center;
+                align-items: center;
+                vertical-align: top;
+                overflow: auto;
+            }
+
+            .uploadResult ul li {
+                list-style: none;
+                padding: 10px;
+                margin-left: 2em;
+            }
+
+            .uploadResult ul li img {
+                width: 100px;
+            }
+        </style>
+
+      <div class="uploadResult">
+          <ul>
+              <li th:each="movieImage: ${dto.imageDTOList}">
+                  <img th:if="${movieImage.path!=null}" th:src="|/display?fileName=${movieImage.getThumbnailURL()}|">
+              </li>
+          </ul>
+      </div>
+
+      <button type="button" class="btn btn-primary">
+          Review Count<span class="badge badge-light">[[${dto.reviewCnt}]]</span>
+      </button>
+      <script>
+          $(document).ready(function(e){
+            
+          });
+      </script>
+  </th:block>
+</th:block>
+```
+
+## Ajax로 영화 리뷰 처리            
+
+영화 리뷰를 처리하는 것은 이전에 다룬 리뷰와 유사하다.           
+사용자는 버튼을 클릭해서 영화 리뷰를 입력할 수 있는 모달창을 보게 된다.         
+모달창에는 별점(점수)를 줄 수 있도록 화면을 구성해서 회원의 아이디와 리뷰 점수, 내용을 입력하게 한다.            
+영화 리뷰가 등록되면 영화 자체의 리뷰 개수와 리뷰 평균이 변경되었기 때문에 아예 현재 URL을 다시 호출해서 갱신하는 방식으로 처리한다.         
+따라서 영화 리뷰가 하나 등록되면 리뷰의 개수와 평균 평점도 변경된다.       
+
+#### ReviewService와 ReviewDTO        
+
+Review 엔티티 클래스는 존재하므로 이에 맞는 ReviewDTO를 구성한다.          
+Review가 Movie와 Member를 참조하는 구성으로 되어 있으므로 ReviewDTO는 엔티티 클래스와 달리 단순 문자열(회원의 mid)이나 영화 번호(mno)를 참조하는 형태로 변경된다.            
+프로젝트 내에 dto 패키지에 ReviewDTO 클래스를 추가한다.          
+
+```java
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ReviewDTO {
+    private Long reviewnum, mno, mid;
+    private String nickname, email, text;
+    private int grade;
+    private LocalDateTime regDate, modDate;
+}
+```
+
+ReviewDTO는 화면에 필요한 모든 내용을 가지고 있어야하기 때문에 회원의 아이디와 닉네임/이메일도 같이 처리할 수 있도록 설계한다.           
+ReviewService는 기존의 서비스가 하는 작업과 거의 동일하다. entityToDto()나 dtoToEntity()같은 메서드를 정의하고 다음과 같은 기능을 정의한다.               
+
+- 특정한 영화의 모든 리뷰를 가져오는 기능          
+- 새로운 영화 리뷰를 등록하는 기능            
+- 특정 영화 리뷰를 수정하는 기능             
+- 특정 영화 리뷰를 삭제하는 기능            
+
+이 중에서 리뷰를 수정하는 기능의 경우 Review 엔티티 클래스에 리뷰 평점과 리뷰 내용을 수정할 수 있는 기능을 추가한다.           
+
+```java
+Review 클래스의 일부
+
+    public void changeGrade(int grade){
+        this.grade = grade;
+    }
+
+    public void changeText(String text){
+        this.text = text;
+    }
+```
+
+위의 기능들을 정의(구현)한 ReviewService/ReviewServiceImpl의 코드는 다음과 같다.         
+
+```java
+ReviewService 클래스 일부
+
+    default ReviewDTO entityToDto(Review movieReview){
+        ReviewDTO movieReviewDTO = ReviewDTO.builder()
+                .reviewnum(movieReview.getReviewnum())
+                .mno(movieReview.getMovie().getMno())
+                .mid(movieReview.getMember().getMid())
+                .nickname(movieReview.getMember().getNickname())
+                .email(movieReview.getMember().getEmail())
+                .grade(movieReview.getGrade())
+                .text(movieReview.getText())
+                .regDate(movieReview.getRegDate())
+                .modDate(movieReview.getModDate())
+                .build();
+        return movieReviewDTO;
+        }
+```
+
+```java
+@Service
+@Log4j2
+@RequiredArgsConstructor
+public class ReviewServiceImpl implements ReviewService{
+    private final ReviewRepository reviewRepository;
+
+    @Override
+    public List<ReviewDTO> getListOfMovie(Long mno) {
+        Movie movie = Movie.builder().mno(mno).build();
+        List<Review> result = reviewRepository.findByMovie(movie);
+        return result.stream().map(movieReview -> entityToDto(movieReview)).collect(Collectors.toList());
+    }
+
+    @Override
+    public Long register(ReviewDTO movieReviewDTO) {
+        Review movieReview = dtoToEntity(movieReviewDTO);
+        reviewRepository.save(movieReview);
+        return movieReview.getReviewnum();
+    }
+
+    @Override
+    public void modify(ReviewDTO movieReviewDTO) {
+        Optional<Review> result = reviewRepository.findById(movieReviewDTO.getReviewnum());
+
+        if(result.isPresent()){
+            Review movieReview = result.get();
+            movieReview.changeGrade(movieReviewDTO.getGrade());
+            movieReview.changeText(movieReviewDTO.getText());
+
+            reviewRepository.save(movieReview);
+        }
+    }
+
+    @Override
+    public void remove(Long reviewnum) {
+        reviewRepository.deleteById(reviewnum);
+    }
+}
+```
+
+#### ReviewController           
+
+ReviewController는 Ajax로 동작하기 때문에 @RestController로 설계하고, ReviewDTO는 JSON 형태로 변환되어서 처리된다.          
+새로운 영화 리뷰의 등록 역시 JSON 포맷으로 전송 처리한다.            
+
+```java
+@RestController
+@RequestMapping("/reviews")
+@Log4j2
+@RequiredArgsConstructor
+public class ReviewController {
+    private final ReviewService reviewService;
+
+    @GetMapping("/{mno}/all")
+    public ResponseEntity<List<ReviewDTO>> getList(@PathVariable("mno") Long mno){
+        log.info("---------------list---------------");
+        log.info("mno:"+mno);
+        List<ReviewDTO> reviewDTOList = reviewService.getListOfMovie(mno);
+        return new ResponseEntity<>(reviewDTOList, HttpStatus.OK);
+    }
+    
+    @PostMapping("/{mno}")
+    public ResponseEntity<Long> addReview(@RequestBody ReviewDTO movieReviewDTO){
+        log.info("---------------add MovieReview-----------------");
+        log.info("reviewDTO:"+movieReviewDTO);
+        
+        Long reviewnum = reviewService.register(movieReviewDTO);
+        
+        return new ResponseEntity<>(reviewnum, HttpStatus.OK);
+    }
+    @PostMapping("/{mno}/{reviewnum}")
+    public ResponseEntity<Long> modifyReview(@PathVariable Long reviewnum, @RequestBody ReviewDTO movieReviewDTO){
+        log.info("-------------modify MovieReview--------------"+reviewnum);
+        log.info("reviewDTO:"+movieReviewDTO);
+        
+        reviewService.modify(movieReviewDTO);
+        
+        reviewService.modify(movieReviewDTO);
+        
+        return new ResponseEntity<>(reviewnum, HttpStatus.OK);
+    }
+    @DeleteMapping("/{mno}/{reviewnum}")
+    public ResponseEntity<Long> removeReview(@PathVariable Long reviewnum){
+        log.info("--------------modify removeReview----------------");
+        log.info("reviewnum:"+reviewnum);
+        reviewService.remove(reviewnum);
+        return new ResponseEntity<>(reviewnum, HttpStatus.OK);
+    }
+}
+```
+
+#### read.html에서의 리뷰 처리          
+
+read.html에서는 리뷰를 처리하기 위해 모달창이 필요하다.        
+여기서는 2개의 모달창을 작성한다. 나머지 하나는 영화의 이미지를 클릭했을 때 화면에 보여주는 용도로 사용한다.         
+
+```html
+read.html 일부
+
+      <div class="reviewModal modal" tabindex="-1" role="dialog">
+          <div class="modal-dialog" role="document">
+              <div class="modal-content">
+                  <div class="modal-header">
+                      <h5 class="modal-title">Movie Review</h5>
+                      <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                          <span aria-hidden="true">&times;</span>
+                      </button>
+                  </div>
+                  <div class="modal-body">
+                      <div class="form-group">
+                          <label>Reviewer ID</label>
+                          <input type="text" class="form-control" name="mid">
+                      </div>
+                      <div class="form-group">
+                          <label>Grade<span class="grade"></span></label>
+                          <div class='starrr'></div>
+                      </div>
+                      <div class="form-group">
+                          <label>Review Text</label>
+                          <input type="text" class="form-control" name="text" placeholder="Good Movie!">
+                      </div>
+                  </div>
+                  <div class="modal-footer">
+                      <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                      <button type="button" class="btn btn-primary reviewSaveBtn">Save changes</button>
+                      <button type="button" class="btn btn-warning modifyBtn">Modify</button>
+                      <button type="button" class="btn btn-danger removeBtn">Remove</button>
+                  </div>
+              </div>
+          </div>
+      </div>
+      <div class="imageModal modal" tabindex="-2" role="dialog">
+          <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                  <div class="modal-header">
+                      <h5 class="modal-title">Picture</h5>
+                      <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                          <span aria-hidden = "true">&times;</span>
+                      </button>
+                  </div>
+                  <div class="modal-body">
+
+                  </div>
+                  <div class="modal-footer">
+                      <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                  </div>
+              </div>
+          </div>
+      </div>
+```
+
+모달창은 reviewModal과 imageModal로 구분한다.       
+reviewModal은 실제 영화 리뷰에 대한 처리를 하기 때문에 회원 아이디(mid)와 별점/리뷰 내용을 입력할 수 있는 태그들을 가진다.         
+reviewModal의 가장 중요한 점은 여러 개의 버튼이 있다는 점이다. 상황에 따라서 보이거나 사라지는 버튼들이 있다.             
+imageModal은 단순히 이미지를 화면에 보여주는 용도로 작성되기 때문에 버튼도 Close 버튼 하나만을 사용한다.            
+
+##### 별점 처리 라이브러리       
+여기서 별점을 처리하는 작업은 http://dobtco.github.io/starrr/ 라이브러리로 처리한다.            
+
+gibhub에서 코드를 다운받으면 dist 폴더에 필요한 파일들이 있다.        
+해당 파일들은 static 폴더에 starrr.js 파일을, css 폴더에는 starrr.css 파일을 추가한다.        
+js와 css에 대한 링크와 font-awesome.min.css 링크를 추가하고 강제로 reviewModal을 화면에 띄우도록 수정한다.           
+
+```html
+      <script th:src="@{/starrr.js}"></script>
+      <link th:href="@{/css/starrr.css}" rel="stylesheet">
+      <link rel="stylesheet" href="http://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.2.0/css/font-awesome.min.css">
+      <script>
+          $(document).ready(function(e){
+            var grade=0;
+            var mno = [[${dto.mno}]];
+
+            $('.starrr').starrr({
+                rating: grade,
+                change: function(e, value){
+                    if(value){
+                        console.log(value);
+                        grade=value;
+                    }
+                }
+            });
+            $(".reviewModal").modal("show");
+          });
+      </script>
+```
+
+starrr 라이브러리는 jQuery의 플러그인의 형태로 동작하므로 starrr()를 이용해서 별점의 값이 변하는 이벤트를 처리할 수 있다.           
+위의 코드에서는 grade라는 변수로 이를 처리한다. 코드를 실행하면 조회 화면에서 바로 리뷰 입력용 모달창을 볼 수 있다.          
+모달창의 Reviewer ID에는 숫자로 된 사용자의 번호를 입력한다.       
+
+##### 리뷰 등록하기            
+리뷰를 등록하는 것은 화면에 버튼을 추가하고 버튼을 클릭했을 때 reviewModal을 보여주는 형태로 시작한다.               
+< div >의 class 속성값이 uploadResult 밑에 버튼들을 추가한다.         
+리뷰의 숫자를 보여주는 부분 아래쪽에 Review Register라는 글자를 가지는 버튼을 추가한다.          
+
+```html
+read.html 일부
+
+      <button type="button" class="btn btn-primary">
+          Review Count<span class="badge badge-light">[[${dto.reviewCnt}]]</span>
+      </button>
+      <button type="button" class="btn btn-info addReviewBtn">
+          Review Register
+      </button>
+      <div class="list-group reviewList">
+          
+      </div>
+```
+
+버튼을 추가하고 마지막에는 < div >를 작성해서 나중에 영화 리뷰들을 보여줄 수 있는 공간으로 활용한다.       
+영화 리뷰를 추가하는 작업은 class 속성값이 addReviewBtn이라는 값을 가지는 버튼을 통해서 이루어진다.          
+
+addReviewBtn 버튼을 클릭하면 reviewModal 창을 보여주도록 수정한다.       
+
+```html
+read.html 일부
+
+            <!-- $(".reviewModal").modal("show"); -->
+            var reviewModal = $(".reviewModal");
+            var inputMid = $('input[name="mid"]');
+            var inputText = $('input[name="text"]');
+
+            $(".addReviewBtn").click(function(){
+                inputMid.val("");
+                inputText.val("");
+
+                $(".removeBtn, .modifyBtn").hide();
+                $(".reviewSaveBtn").show();
+
+                reviewModal.modal('show');
+          });
+```
+
+reviewModal창의 입력 부분은 나중에 별도로 사용할 일이 많으므로, 변수를 외부로 빼서 선언하고,                
+모달창 내부에 필요 없는 버튼들은 보이지 않도록 처리한 후에 reviewModal창을 띄우게 처리한다.           
+
+영화 리뷰의 등록은 Save changes 를 클릭할 때 동작하도록 이벤트 처리를 작성한다.         
+버튼에는 class 속성값으로 reviewSaveBtn 이라는 이름이 지정되어 있다.         
+```html
+          $('.reviewSaveBtn').click(function(){
+            var data = {mno:mno, grade:grade, text:inputText.val(),mid:inputMid.val()};
+            console.log(data);
+
+            $.ajax({
+                url:'/reviews/'+mno,
+                type:'POST',
+                data: JSON.stringify(data),
+                contentType:"application/json; charset=utf-8",
+                dataType:"text",
+                success: function(result){
+                    console.log("result:"+result);
+                    self.location.reload();
+                }
+            })
+            reviewModal.modal('hide');
+          });
+```
+
+reviewSaveBtn을 클릭하면 회원의 아이디와 점수, 내용을 JSON 데이터로 만들어서 전송하게 한다.           
+만일 데이터 처리가 성공하면 self.location.reload()를 이용해서 URL을 다시 호출한다.         
+이를 통해서 영화 리뷰가 등록된 후 변화하는 평균 평점과 영화 리뷰의 개수를 갱신하게 된다.           
+
+##### 리뷰 리스트 보여주기       
+
+페이지가 새로 고침이 되면 평균 평점과 리뷰 개수는 갱신되지만, 실제 리뷰의 내용을 가져오지는 않는다.           
+리뷰는 Ajax를 이용해서 MovieReviewDTO들의 리스트를 JSON 형태로 받아서 처리한다.              
+이를 위해서 함수를 하나 작성하고 페이지가 열릴 때 무조건 호출되도록 처리한다.         
+
+```html
+                function getMovieReviews() {
+
+                    function formatTime(str){
+                        var date = new Date(str);
+
+                        return date.getFullYear() + '/' +
+                            (date.getMonth() + 1) + '/' +
+                            date.getDate() + ' ' +
+                            date.getHours() + ':' +
+                            date.getMinutes();
+                    }
+
+                    $.getJSON("/reviews/"+ mno +"/all", function(arr){
+                        var str ="";
+
+                        $.each(arr, function(idx, review){
+
+                            console.log(review);
+
+                            str += '    <div class="card-body" data-reviewnum='+review.reviewnum+' data-mid='+review.mid+'>';
+                            str += '    <h5 class="card-title">'+review.text+' <span>'+ review.grade+'</span></h5>';
+                            str += '    <h6 class="card-subtitle mb-2 text-muted">'+review.nickname+'</h6>';
+                            str += '    <p class="card-text">'+ formatTime(review.regDate) +'</p>';
+                            str += '    </div>';
+                        });
+
+                        $(".reviewList").html(str);
+                    });
+                }
+
+                getMovieReviews();
+```
+
+코드의 마지막에는 getMovieReviews()를 호출하기 때문에 페이지가 열리면 jQuery의 getJSON()을 이용해서 MovieReviewController를 호출하게 되고,           
+reviewList라는 클래스 속성으로 지정된 < div >의 내용물을 채우게 된다. 위 코드가 반영되면 영화와 함께 리뷰들도 같이 출력된다.        
+
+##### 특정 리뷰 선택하기      
+
+리뷰 목록에서 특정한 리뷰를 선택하면 수정이나 삭제가 가능하도록 reviewModal창을 보이게 처리해야 한다.       
+이때 모달창 내부에 있는 버튼들도 상황에 맞게 처리해야 한다.        
+
+```html
+                var reviewnum;
+
+                $(".reviewList").on("click", ".card-body", function(){
+                    $(".reviewSaveBtn").hide();
+                    $(".removeBtn, .modifyBtn").show();
+
+                    var targetReview = $(this);
+
+                    reviewnum = targetReview.data("reviewnum");
+                    console.log("reviewnum:"+reviewnum);
+                    inputMid.val(targetReview.data("mid"));
+                    inputText.val(targetReview.find('.card-title').clone().children().remove().end().text());
+
+                    var grade = targetReview.find('.card-title span').html();
+                    $(".starrr a:nth-child("+grade+")").trigger('click');
+                    $('.reviewModal').modal('show');
+                });
+```
+
+상단의 reviewnum은 나중에 수정이나 삭제 작업에도 사용할 수 있도록 외부에 선언한다.          
+영화 리뷰를 선택하면 해당 리뷰의 여러 정보를 가져와서 reviewModal로 세팅하고 모달창을 보여준다.             
+
+##### 영화 리뷰의 수정과 삭제         
+
+reviewModal창에 나오는 영화 리뷰의 수정과 삭제는 모두 Ajax를 통해서 PUT 방식 혹은 DELETE 방식으로 동작한다.         
+수정과 삭제 작업이 모두 처리된 후에는 현재 페이지를 다시 호출해서 서버로부터 변경된 데이터를 받도록 처리된다.             
+
+```html
+                $(".modifyBtn").on("click",function(){
+                    var data = {reviewnum:reviewnum, mno:mno,grade:grade,text:inputText.val(),mid:inputMid.val()};
+                    console.log(data);
+
+                    $.ajax({
+                        url:'/reviews/'+mno+"/"+reviewnum,
+                        type:"PUT",
+                        data:JSON.stringify(data),
+                        contentType:"application/json; charset=uft-8",
+                        dataType:"text",
+                        success:function(result){
+                            console.log("result:"+result);
+                            self.location.reload();
+                        }
+                    })
+                    reviewModal.modal('hide');
+                });
+                $(".removeBtn").on("click", function(){
+                    var data = {reviewnum:reviewnum};
+                    console.log(data);
+
+                    $.ajax({
+                        url:'/reviews/'+mno+"/"+reviewnum,
+                        type:"DELETE",
+                        contentType:"application/json; charset=utf-8",
+                        dataType:"text",
+                        success:function(result){
+                            console.log("result:"+result);
+                            self.location.reload();
+                        }
+                    })
+                    reviewModal.modal('hide');
+                });
+```
+브라우저를 통해서 특정 영화의 리뷰 중 하나를 선택하고 삭제하면 화면상의 리뷰 개수와 평점 평균이 변하고, 리뷰의 목록도 줄어드는 것을 확인할 수 있다.          
+
+#### 원본 이미지 보기             
+
+조회 화면에서는 섬네일을 클릭했을 때 이미지의 원본 파일을 볼 수 있는 방법을 제공해야 한다.             
+UploadController에 /display?fileName=의 경우에 지정된 이미지를 조회할 수 있는 기능이 있으므로 이를 활용하는 방법도 있지만           
+여기서는 섬네일의 파일을 호출하더라도 중간에 s_만 추가되어 있다는 점에 착안하여 특정한 파라미터의 값이 존재하는 경우에는       
+s_가 없는 원본 파일을 보내주는 형태로 수정해서 사용한다.        
+
+```java
+UploadController 클래스 일부
+
+    @GetMapping("/display")
+    public ResponseEntity<byte[]> getFile(String fileName, String size){
+        ResponseEntity<byte[]> result = null;
+
+        try {
+        String srcFileName = URLDecoder.decode(fileName, "UTF-8");
+
+        log.info("fileName: "+srcFileName);
+
+        File file = new File(uploadPath+File.separator+srcFileName);
+
+        log.info("file: "+file);
+
+        if(size!=null && size.equals("1")){
+        file=new File(file.getParent(), file.getName().substring(2));
+        }
+
+        log.info("file:"+file);
+
+        HttpHeaders header = new HttpHeaders();
+
+        header.add("Content-Type", Files.probeContentType(file.toPath()));
+        result = new ResponseEntity<>(FileCopyUtils.copyToByteArray(file), header, HttpStatus.OK);
+
+        }catch(Exception e){
+        log.error(e.getMessage());
+        return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        return result;
+    }
+```
+
+getFile()은 기존에는 파라미터로 fileName만을 사용했지만, size라는 파라미터를 하나 추가해서 원본 파일인지 섬네일인지 구분할 수 있도록 구성한다.             
+만일 size 변수의 값이 1인 경우 원본 파일을 전송한다.           
+read.html 에서는 섬네일을 감싸고 있는 < li > 태그에 data-file 속성을 추가해서 섬네일 이름을 알 수 있게 처리한다.              
+
+```html
+read.html 파일 일부
+
+      <div class="uploadResult">
+          <ul>
+              <li th:each="movieImage: ${dto.imageDTOList}" th:data-file="${movieImage.getThumbnailURL()}">
+                  <img th:if="${movieImage.path!=null}" th:src="|/display?fileName=${movieImage.getThumbnailURL()}|">
+              </li>
+          </ul>
+      </div>
+```
+
+화면에서 섬네일이 포함된 < li >를 클릭하면 data-file 속성값을 가져와서 imageModal창에 이미지 태그로 추가한다.        
+이때 size 파라미터의 값을 이용해서 원본 이미지를 가져오게 한다.         
+
+```html
+                $(".uploadResult li").click(function() {
+                    var file=$(this).data('file');
+
+                    console.log(file);
+
+                    $('.imageModal .modal-body').html("<img style='width:100%' src='/display?fileName="+file+"&size=1'>")
+                    $(".imageModal").modal("show");
+                });
+```
