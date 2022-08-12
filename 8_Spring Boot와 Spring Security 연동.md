@@ -81,7 +81,7 @@ templates 폴더에는 sample 폴더를 작성하고 각 경로에 맞는 페이
 #### 스프링 시큐리티 용어와 흐름         
 
 스프링 시큐리티로 원하는 작업을 하기 위해서는 반드시 스프링 시큐리티가 어떤 객체로 구성되어 있고,            
-이들이 어떤 흐르믈 가지고 동작하는지를 이해하는 것이 중요하다.            
+이들이 어떤 흐름을 가지고 동작하는지를 이해하는 것이 중요하다.            
 프로젝트를 실행하고 /sample/all과 같은 경로를 호출하면 시큐리티로 인해 로그인 화면이 보이는 것을 확인할 수 있는데 서버의 로그를 중심으로 살펴보겠다.          
 서버에서는 /sample/all을 호출할 경우 내부적으로 여러 개의 필터가 동작하는 것을 확인할 수 있다.            
 
@@ -127,7 +127,7 @@ Authentication Provider는 인증 매니저가 어떻게 동작해야 하는지�
 필터의 핵심적인 동작은 AthenticationManager를 통해서 인증Authentication이라는 타입의 객체로 작업을 하게 된다.                 
 흥미롭게도 AuthenticationManager가 가진 인증 처리 메서드는 파라미터도 Authentication 타입으로 받고 리턴 타입 역시 Authentication 이다.             
 
-인증Authentivation을 쉽게 이해하려면 주민등록증과 비슷하다고 생각하면 된다.        
+인증Authentication을 쉽게 이해하려면 주민등록증과 비슷하다고 생각하면 된다.        
 인증이라는 용어는 스스로 증명하다라는 의미이다. 예를 들어 로그인하는 과정에서는 사용자의 아이디/패스워드로 자신이 어떤 사람인지를 전달한다.           
 전달된 아이디/패스워드로 실제 사용자에 대해서 검증하는 행위는 인증 매니저AuthenticationManager를 통해서 이루어진다.         
 
@@ -154,7 +154,7 @@ AuthenticationManager는 다양한 방식으로 인증처리 방법을 제공해
 AuthenticationManager는 이러한 처리를 AuthenticationProvider로 처리한다.            
 
 AuthenticationProvider는 전달되는 토큰의 타입을 처리할 수 있는 존재인지를 확인하고, 이를 통해서 authenticate()를 수행하게 된다.       
-그렇기 때문에 다음 그림처럼 다양한 인증처리를 할 수 있는 객체들을 가지는 구조가 된다.            
+그렇기 때문에 다양한 인증처리를 할 수 있는 객체들을 가지는 구조가 된다.            
 
 AuthenticationProvider는 내부적으로 UserDetailsService를 이용한다.        
 UserDetailsService는 실제로 인증을 위한 데이터를 가져오는 역할을 한다.               
