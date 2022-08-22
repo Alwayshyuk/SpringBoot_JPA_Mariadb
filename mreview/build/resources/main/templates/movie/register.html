@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<th:block th:replace="~{/layout/basic :: setContent(~{this::content})}">
+    <th:block th:fragment="content">
+        <h1 class="mt-4">Movie Register Page</h1>
+
+        <form th:action="@{/movie/register}" th:method="post">
+            <div class="form-group">
+                <label>Title</label>
+                <input type="text" class="form-control" name="title" placeholder="Enter Title">
+            </div>
+
+            <div class="form-group fileForm">
+                <label>Image Files</label>
+                <div class="custom-file">
+                    <input type="file" class="custom-file-input files" id="fileInput" multiple>
+                    <label class="custom-file-label" data-browse="Browse"></label>
+                </div>
+            </div>
+            <div class="box">
+
+            </div>
+            <button type="submit" class="btn btn-primary">Submit</button>
+            <style>
+            .uploadResult{
+                width:100%;
+                background-color:gray;
+                margin-top:10px;
+            }
+            .uploadResult ul{
+                display: flex;
+                flex-flow: row;
+                justify-content: center;
+                align-items: center;
+                vertical-align: top;
+                overflow: auto;
+            }
+            .uploadResult ul li {
+                list-style: none;
+                padding: 10px;
+                margin-left: 2em;
+            }
+            .uploadResult ul li img{
+                width: 100px;
+            }
+        </style>
+            <div class="uploadResult">
+                <ul>
+
+                </ul>
+            </div>
+        </form>
+
+        <script>
+
+            $(".uploadResult").on("click", "li button", function(e){
+                console.log("delete file");
+                var targetFile = $(this).data("file");
+                var targetLi = $(this).closest("li");
+                $.ajax({
+                    url:'/removeFile',
+                    data:{fileName:targetFile},
+                    dataType:'text',
+                    type:'POST',
+                    success: function(result){
+                        alert(result);
+                        targetLi.remove();
+                    }
+                });
+            });
+            function showResult(uploadResultArr){
+
+                var uploadUL = $(".uploadResult ul");
+
+                var str ="";
+
+                $(uploadResultArr).each(function(i, obj) {
+
+                    str += "<li data-name='" + obj.fileName + "' data-path='"+obj.folderPath+"' data-uuid='"+obj.uuid+"'>";
+                    str + " <div>";
+                    str += "<button type='button' data-file=\'" + obj.imageURL + "\' "
+                    str += "class='btn-warning btn-sm'>X</button><br>";
+                    str += "<img src='/display?fileName=" + obj.thumbnailURL + "'>";
+                    str += "</div>";
+                    str + "</li>";
+                });
+
+                uploadUL.append(str);
+            }
+            $(document).ready(function(e){
+                var regex = new RegExp("(.*?)\.(exe|sh|zip|alz|tiff)$");
+                var maxSize = 10485760;
+
+                function checkExtension(fileName, fileSize){
+                    if(fileSize>=maxSize){
+                        alter("파일 사이즈 초과");
+                        return false;
+                    }
+
+                    if(regex.test(fileName)){
+                        alter("해당 종류의 파일은 업로드할 수 없습니다.");
+                        return false;
+                    }
+                    return true;
+                }
+
+                $(".custom-file-input").on("change", function(){
+                    var fileName = $(this).val().split("\\").pop();
+                    $(this).siblings(".custom-file-label").addClass("selected").html(fileName);
+
+                    var formData = new FormData();
+
+                    var inputFile = $(this);
+
+                    var files = inputFile[0].files;
+
+                    var appended = false;
+
+                    for(var i = 0; i<files.length; i++){
+                        if(!checkExtension(files[i].name, files[i].size)){
+                            return false;
+                        }
+                        console.log(files[i]);
+                        formData.append("uploadFiles",files[i]);
+                        appended = true;
+                    }
+
+                    if(!appended){return;}
+
+                    for(var value of formData.values()){
+                        console.log(value);
+                    }
+
+                    $.ajax({
+                        url: '/uploadAjax',
+                        processData: false,
+                        contentType: false,
+                        data: formData,
+                        type: 'POST',
+                        dataType: 'json',
+                        success: function(result){
+                            console.log(result);
+                            showResult(result);
+                        },
+                        error:function(jqXHR, textStatus, errorThrown){
+                            console.log(textStatus);
+                        }
+                    });
+                });
+            });
+            $(".btn-primary").on("click",function(e){
+                e.preventDefault();
+                var strr = "";
+                $(".uploadResult li").each(function(i,obj){
+                    var target = $(obj);
+
+                    strr+="<input type='hidden' name='imageDTOList["+i+"].imgName'value='"+target.data('name')+"'>";
+                    strr+="<input type='hidden' name='imageDTOList["+i+"].path'value='"+target.data('path')+"'>";
+                    strr+="<input type='hidden' name='imageDTOList["+i+"].uuid'value='"+target.data('uuid')+"'>";
+                });
+
+                $(".box").html(strr);
+
+                $("form").submit();
+            });
+        </script>
+    </th:block>
+</th:block>
