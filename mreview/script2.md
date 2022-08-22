@@ -1,0 +1,620 @@
+# 파일 업로드 처리          
+
+스프링 부트로 파일을 업로드하는 것은 아주 단순한 설정만으로도 가능하다.          
+스프링 부트의 파일 업로드와 관련된 설정은 1) 별도의 파일 업로드 라이브러리(commons-fileupload 등)를 이용하는 경우와            
+2 ) Servlet 3 버전부터 추가된 자체적인 파일 업로드 라이브러리를 이용하는 방식으로 구분할 수 있다.          
+
+만일 프로젝트를 실행하는 WAS의 버전이 낮은 경우나 WAS가 아닌 환경에서 스프링 부트 프로젝트를 실행한다면              
+별도의 라이브러리를 사용하는 것이 좋지만 여기서는 서블릿 기반으로 설정한다.            
+대부분의 웹 어플리케이션은 이미지 파일 등을 업로드할 때 섬네일을 만들어서 처리한다.         
+여기서도 섬네일을 만들어서 목록이나 조회 화면에서 보이도록 하고, 조회 화면에서는 섬네일을 클릭하면 원본 파일을 보이도록 작성한다.         
+
+## 파일 업로드를 위한 설정          
+
+스프링 부트 프로젝트에 내장된 Tomcat을 이용해서 실행한다면 별도의 추가적인 라이브러리 없이 application.properties 파일을 수정하는 것만으로 충분하다.            
+프로젝트 생성 시에 만들어진 application.properties 파일에 아래의 내용을 추가한다.
+
+```
+spring.servlet.multipart.enabled=true
+spring.servlet.multipart.location=c:\\upload
+spring.servlet.multipart.max-request-size=30MB
+spring.servlet.multipart.max-file-size=10MB
+```
+
+추가된 설정의 의미는 다음과 같다.       
+
+- spring.servlet.multipart.enabled: 파일 업로드 가능 여부를 선택한다.            
+- spring.servlet.multipart.location: 업로드된 파일의 임시 저장 경로       
+- spring.servlet.multipart.max-request-size: 한 번에 최대 업로드 가능 용량               
+- spring.servlet.multipart.max-file-size: 파일 하나의 최대 크기                 
+
+#### 파일 업로드를 위한 컨트롤러와 화면 테스트          
+
+실제 업로드된 파일 처리는 컨트롤러로 처리한다.               
+이와 관련해서 스프링에서는 MultipartFile 타입을 제공하므로 별도의 추가적인 처리가 필요하지 않고 바로 사용이 가능하다.               
+여기서는 파일 업로드와 관련된 모든 작업은 Ajax 방식으로 처리할 것이므로 업로드 결과에 대한 별도의 화면을 작성할 필요는 없다.              
+모든 업로드 결과는 JSON 형태로 제공하도록 작성할 것이다.           
+작성하는 컨트롤러는 controller 패키지를 생성하고, UploadController 클래스를 추가한다.           
+
+```java
+    @RestController
+    @Log4j2
+    public class UploadController {
+        @PostMapping("/uploadAjax")
+        public void uploadFile(MultipartFile[] uploadFiles){
+            for(MultipartFile uploadFile : uploadFiles){
+                String originalName = uploadFile.getOriginalFilename();
+                String fileName = originalName.substring(originalName.lastIndexOf("\\")+1);
+                log.info("fileName: "+ fileName);
+            }
+        }
+    }
+```
+
+uploadFile() 메서드는 파라미터로 MultipartFile 배열을 받도록 설계한다.          
+배열을 활용하면 동시에 여러 개의 파일 정보를 처리할 수 있으므로 화면에서 여러 개의 파일을 동시에 업로드할 수 있다.            
+메서드 내부에서는 아직 실제 파일을 업로드하지는 않지만 업로드하는 파일의 이름을 파악할 수 있다.           
+브라우저에 따라 업로드하는 파일의 이름은 전체 경로일 수도 있고(IE계열), 단순히 파일의 이름만을 의미할 수도 있다.(크롬 브라우저)            
+
+##### 테스트를 위한 컨트롤러와 화면         
+실제 업로드는 브라우저상에서 jQuery로 처리할 것이므로 controller 패키지에 UploadTestContoller를 추가하고 GET 방식으로 화면을 볼 수 있도록 구성한다.             
+
+```java
+@Controller
+public class UploadTestController {
+    @GetMapping("/uploadEx")
+    public void uploadEx() {
+
+    }
+}
+```
+
+templates 폴더에는 uploadEx.html을 추가해서 화면 내용을 구성한다.           
+
+Ajax로 파일 업로드를 하기 위해서는 가상의 Form 객체를 만들어서 사용한다.           
+Form Data라는 객체로 전송하려는 내용을 추가할 수 있는데 파일 데이터도 포함이 가능하다.            
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+    <input name="uploadFiles" type="file" multiple>
+    <button class="uploadBtn">Upload</button>
+
+    <script
+        src="https://code.jquery.com/jquery-3.5.1.min.js"
+        integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0="
+        crossorigin="anonymous"></script>
+    <script>
+        $('.uploadBtn').click(function(){
+            var formData = new FormData();
+            var inputFile = $("input[type='file']");
+            var files = inputFile[0].files;
+            for(var i = 0; i<files.length; i++){
+                console.log(files[i]);
+                formData.append("uploadFiles", files[i]);
+            }
+            });
+    </script>
+</body>
+</html>
+```
+
+화면에서 Upload 버튼을 클릭하면 FormData를 생성하고 컨트롤러에 사용하는 uploadFiles라는 이름으로 파일 데이터를 추가한다.            
+프로젝트를 실행하고 /uploadEx를 실행하면 여러 개의 파일을 업로드할 수 있는 화면을 확인할 수 있다.            
+
+파일을 선택한 후에 Upload 버튼을 클릭하면 선택한 파일의 정보가 콘솔창을 통해 출력된다.       
+
+##### Ajax 업로드 처리            
+Ajax로 업로드를 처리하는 부분은 몇 가지 속성을 지정하기 때문에 $.ajax()를 이용해서 처리한다.         
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+    <input name="uploadFiles" type="file" multiple>
+    <button class="uploadBtn">Upload</button>
+
+    <script
+        src="https://code.jquery.com/jquery-3.5.1.min.js"
+        integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0="
+        crossorigin="anonymous"></script>
+    <script>
+        $('.uploadBtn').click(function(){
+            var formData = new FormData();
+            var inputFile = $("input[type='file']");
+            var files = inputFile[0].files;
+            for(var i = 0; i<files.length; i++){
+                console.log(files[i]);
+                formData.append("uploadFiles", files[i]);
+            }
+
+            $.ajax({
+                url: '/uploadAjax',
+                processData: false,
+                contentType: false,
+                data: formData,
+                type: 'POST',
+                dataType: 'json',
+                success: function(result){
+                    console.log(result);
+                },
+                error: function(jqXHR, textStatus, errorThrown){
+                    console.log(textStatus);
+                }
+            });
+            });
+    </script>
+</body>
+</html>
+```
+
+파일 업로드를 위해서는 contentType 속성을 반드시 false로 지정하는데 파일 업로드는 multipart/form-data 타입을 사용하기 위한 용도이다.           
+dataType 속성으로 json을 지정하였지만 아직은 컨트롤러의 메서드에서는 어떠한 데이터도 반환하지 않는 상태이므로 화면상의 처리는 조금 뒤쪽에서 진행한다.          
+프로젝트를 실행하고 파일 업로드를 실행하면 서버에는 업로드된 파일의 이름들이 출력된다.           
+브라우저상에서는 아직 결과가 처리되지 않았으므로 parsererror라는 메시지만 출력된다.           
+
+#### 업로드된 파일의 저장             
+
+파일이 업로드 되는 것을 확인했다면 그 다음은 실제로 업로드된 파일을 저장해야 한다.          
+스프링 자체에서 제공하는 FileCopyUtils를 이용할 수도 있고, MultipartFile 자체에도 transferTo()를 이용하면 간단한 파일을 저장할 수 있다.           
+파일을 저장할 때 경로는 설정 파일을 통해서 저장하고 사용할 수 있도록 application.properties에 별도의 설정값을 추가하고         
+UploadController에서 이 설정값을 이용하도록 작성한다.           
+
+```
+application.properties 파일 일부
+
+org.zerock.upload.path=C:\\upload
+
+
+UploadController 클래스
+
+@RestController
+@Log4j2
+public class UploadController {
+
+    @Value("${org.zerock.upload.path}")
+    private String uploadPath;
+
+    @PostMapping("/uploadAjax")
+    public void uploadFile(MultipartFile[] uploadFiles){
+        for(MultipartFile uploadFile : uploadFiles){
+            String originalName = uploadFile.getOriginalFilename();
+            String fileName = originalName.substring(originalName.lastIndexOf("\\")+1);
+            log.info("fileName: "+ fileName);
+        }
+    }
+}
+```
+
+파일을 저장하는 단계에서는 다음과 같은 사항을 고려해야 한다.        
+- 업로드된 확장자가 이미지만 가능하도록 검사(첨부파일을 이용한 원격 셀)          
+- 동일한 이름의 파일이 업로드 된다면 기존 파일을 덮어쓰는 문제            
+- 업로드된 파일을 저장하는 폴더의 용량          
+
+##### 동일한 이름의 파일 문제               
+
+첨부파일의 이름이 같은 경우에는 기존의 파일이 사라지고 새로운 파일로 변경되기 때문에 문제가 발생할 수 있다.            
+이를 막기 위해서는 고유한 이름을 생성해서 파일 이름으로 사용해야만 한다.         
+가장 많이 사용하는 방식은 1) 시간 값을 파일 이름에 추가하거나, 2) UUID를 이용해서 고유한 값을 만들어서 사용하는 방식이다.         
+
+여기서는 java.util 패키지의 UUID를 이용해서 이를 처리한다. 파일 이름은 UUID값_파일명의 형태로 저장한다.               
+실제 폴더에서 이와 같이 생성되는 UUID 값이 파일 이름으로 사용되기 때문에 동일한 이름의 파일이지만 다른 이름을 부여할 수 있다.            
+
+##### 동일한 폴더에 너무 많은 파일           
+업로드되는 파일들을 동일한 폴더에 넣는다면 너무 많은 파일이 쌓이게 되고 성능도 저하된다.         
+무엇보다도 운영체제에 따라 하나의 폴더에 넣을 수 있는 파일의 수에 대한 제한이 있다.(FAT32 방식은 65,534개라는 제한이 있다.)          
+일반적으로 가장 많이 쓰는 방법은 파일이 저장되는 시점의 년/월/일 폴더를 따로 생성해서 한 폴더에 너무 많은 파일이 쌓이지 않도록 하는 것이다.               
+
+##### 파일의 확장자 체크           
+
+첨부파일을 이용해서 '쉘(shell) 스크립트' 파일 등을 업로드해서 공격하는 기법들도 있기 때문에          
+브라우저에서 파일을 업로드하는 순간이나 서버에서 파일을 저장하는 순간에도 이를 검사하는 과정을 거쳐야 한다.          
+이 처리는 MultipartFile에서 제공하는 getContentType()을 이용해서 처리할 수 있다.              
+위의 내용을 종합해서 업로드를 처리하는 기능은 아래와 같이 완성할 수 있다.          
+
+```java
+UploadController 클래스
+
+@RestController
+@Log4j2
+public class UploadController {
+
+    @Value("${org.zerock.upload.path}")
+    private String uploadPath;
+
+    @PostMapping("/uploadAjax")
+    public void uploadFile(MultipartFile[] uploadFiles){
+
+        for(MultipartFile uploadFile : uploadFiles){
+            if(uploadFile.getContentType().startsWith("image") == false){
+                log.warn("this file is not image type");
+                return;
+            }
+
+            String originalName = uploadFile.getOriginalFilename();
+            String fileName = originalName.substring(originalName.lastIndexOf("\\")+1);
+            log.info("fileName: "+ fileName);
+
+            String folderPath = makeFolder();
+
+            String uuid = UUID.randomUUID().toString();
+
+            String saveName = uploadPath + File.separator + folderPath + File.separator + uuid + "_" + fileName;
+
+            Path savePath = Paths.get(saveName);
+
+            try {
+                uploadFile.transferTo(savePath);
+            } catch(IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private String makeFolder(){
+        String str = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
+        String folderPath = str.replace("/", File.separator);
+
+        File uploadPathFolder = new File(uploadPath, folderPath);
+
+        if(uploadPathFolder.exists() == false){
+            uploadPathFolder.mkdirs();
+        }
+        return folderPath;
+    }
+}
+
+```
+
+프로젝트를 시작하고 위의 코드를 이용하면 C:\upload 폴더에 년/월/일 폴더가 생성되면서 파일들이 업로드되는 것을 확인할 수 있다.
+업로드가 완료된 파일들은 각자 고유의 UUID 값이 붙어있으므로 동일한 이름의 파일이 생성될 수 없다.          
+
+#### 업로드 결과 반환과 화면 처리           
+
+정상적인 사이즈의 이미지 파일이라면 업로드가 처리되지만 아직 브라우저에는 아무런 결과가 반영되지 않는다.             
+결과 데이터는 JSON으로 전송할 것이므로 어떤 구조의 데이터를 전송할 것인지 결정해야 한다.            
+브라우저에서 필요한 정보를 정리하면 다음과 같다.            
+- 업로드된 파일의 원래 이름           
+- 파일의 UUID 값             
+- 업로드된 파일의 저장 경로             
+
+물론 위의 정보는 UploadController에서 파일을 저장할 때 만들어진 하나의 문자열로도 처리가 가능하지만           
+브라우저에서 처리가 간단할 수 있도록 클래스와 객체를 구성해서 처리한다.            
+프로젝트 내에 dto 패키지를 구성하고, UploadResultDTO 클래스를 작성한다.               
+
+```java
+@Data
+@AllArgsConstructor
+public class UploadResultDTO implements Serializable {
+    private String fileName, uuid, folderPath;
+
+    public String getImageURL(){
+        try {
+            return URLEncoder.encode(folderPath+"/"+uuid+"_"+fileName,"UTF-8");
+        }catch (UnsupportedEncodingException e){
+            e.printStackTrace();
+        }
+        return "";
+    }
+}
+```
+
+UploadResultDTO는 실제 파일과 관련된 모든 정보를 가지는데 나중에 전체 경로가 필요한 경우를 대비해서 getImageURL()을 제공한다.          
+UploadController에서는 업로드 결과를 반환하기 위해서 ResponseEntity를 이용해서 이를 처리하는 형태로 변경한다.         
+
+```java
+UploadController 클래스 일부
+
+    @PostMapping("/uploadAjax")
+    public ResponseEntity<List<UploadResultDTO>> uploadFile(MultipartFile[] uploadFiles){
+
+        List<UploadResultDTO> resultDTOList = new ArrayList<>();
+
+        for(MultipartFile uploadFile : uploadFiles) {
+            if (uploadFile.getContentType().startsWith("image") == false) {
+                log.warn("this file is not image type");
+                return new ResponseEntity<>(HttpStatus.FORBIDDEN);
+            }
+
+            String originalName = uploadFile.getOriginalFilename();
+            String fileName = originalName.substring(originalName.lastIndexOf("\\") + 1);
+            log.info("fileName: " + fileName);
+    
+            String folderPath = makeFolder();
+    
+            String uuid = UUID.randomUUID().toString();
+    
+            String saveName = uploadPath + File.separator + folderPath + File.separator + uuid + "_" + fileName;
+    
+            Path savePath = Paths.get(saveName);
+    
+            try {
+                uploadFile.transferTo(savePath);
+                resultDTOList.add(new UploadResultDTO(fileName, uuid, folderPath));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+            return new ResponseEntity<>(resultDTOList, HttpStatus.OK);
+    }
+
+```
+
+메서드의 리턴 타입은 void에서 ResponseEntity< List< UploadResultDTO > > 로 변경하고,          
+이미지가 아닌 파일의 경우에는 예외 처리 대신에 403Forbidden을 반환하도록 변경한다.         
+브라우저는 업로드 처리 후에 JSON의 배열 형태로 결과를 전달받게 된다.           
+
+##### 업로드 이미지 출력하기          
+
+JSON으로 반환된 업로드 결과를 화면에서 확인하기 위해서는 1) 브라우저에서 링크를 통해 < img > 태그를 추가해주어야 하고, 2) 서버에서는 해당 URL이           
+호출되는 경우에 이미지 파일 데이터를 브라우저로 전송해 주어야 한다.               
+이 작업을 처리하기 위해 UploadController에는 /display?fileName=xxxx 와 같은 URL 호출 시에 이미지가 전송되도록 메서드를 추가한다.            
+
+```java
+    @GetMapping("/display")
+    public ResponseEntity<byte[]> getFile(String fileName){
+        ResponseEntity<byte[]> result = null;
+
+        try {
+            String srcFileName = URLDecoder.decode(fileName, "UTF-8");
+
+            log.info("fileName: "+srcFileName);
+
+            File file = new File(uploadPath+File.separator+srcFileName);
+
+            log.info("file: "+file);
+
+            HttpHeaders header = new HttpHeaders();
+
+            header.add("Content-Type", Files.probeContentType(file.toPath()));
+            result = new ResponseEntity<>(FileCopyUtils.copyToByteArray(file), header, HttpStatus.OK);
+
+        }catch(Exception e){
+            log.error(e.getMessage());
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        return result;
+    }
+```
+
+추가된 getFile() 메서드는 URL 인코딩된 파일 이름을 파라미터로 받아서 해당 파일을 byte[]로 만들어서 브라우저로 전송한다.          
+파일의 확장자에 따라서 브라우저에 전송하는 MIME 타입이 달라져야 하는 문제는 java.nio.file 패키지의 Files.probeContentType()을 이용해서 처리하고,          
+파일 데이터의 처리는 스프링에서 제공하는 org.springframework.util.FileCopyUtils를 이용해서 처리한다.            
+브라우저에서는 업로드된 결과 중에 imageURL 속성이 있다.(UploadResultDTO의 getImageURL())            
+
+imageURL은 URL 인코딩된 파일 경로와 UUID 등이 결합된 정보이므로 이를 이용해서 < img > 태그를 작성한다.            
+uploadEx.html에는 업로드된 이미지들을 보여줄 수 있는 < div >를 하나 추가한다.         
+```html
+    <div class="uploadResult">
+
+    </div>
+```
+
+Ajax 업로드 이후에 이미지들을 호출하는 showUploadedImages() 함수를 작성하고, Ajax 호출이 성공한 후에 /display?fileName=xxx을 호출한다.           
+
+```html
+        function showUploadedImages(arr){
+            console.log(arr);
+            var divArea = $(".uploadResult");
+
+            for(var i = 0; i<arr.length; i++)}
+                divArea.append("<img src='/display?fileName="+arr[i].imageURL+"'>");
+            }
+        }
+```
+
+Ajax 호출 부분은 아래와 같이 변경한다.          
+
+```html
+            $.ajax({
+                url: '/uploadAjax',
+                processData: false,
+                contentType: false,
+                data: formData,
+                type: 'POST',
+                dataType: 'json',
+                success: function(result){
+                    showUploadedImages(result);
+                },
+                error: function(jqXHR, textStatus, errorThrown){
+                    console.log(textStatus);
+                }
+            });
+```
+
+브라우저의 처리가 완료된 후에는 화면에서 파일을 선택하고 업로드 이후에 다시 브라우저를 통해서 업로드된 파일을 조회할 수 있다.          
+
+#### 섬네일 이미지 생성과 화면 처리          
+
+이미지가 정상적으로 업로드 처리가 되었지만, 원본 이미지가 그대로 나오면 데이터를 많이 소비해야 하기 때문에 가능하면           
+섬네일을 만들어서 전송해주고 원본을 보려고 할 때 원본 파일을 보여주는 방식이 더 낫다.         
+특히 목록 페이지는 이미지가 많아지므로 주의해야 한다.            
+
+섬네일 이미지의 처리는 다음과 같은 과정으로 처리한다.           
+
+- 업로드된 파일을 저장하고 섬네일 라이브러리를 활용해서 섬네일 파일을 만들어 준다.             
+- 섬네일 파일은 파일의 맨 앞에 s_를 붙여서 일반 파일과 구분한다.           
+- UploadResultDTO에 getThumbnailURL()을 추가해서 섬네일의 경로를 < img > 태그로 처리한다.          
+
+섬네일을 처리하기 위해서는 java.imageio 패키지를 이용할 수도 있지만 프로젝트에서는 Thumbnailator 라이브러리를 이용한다.               
+Thumbnailator는 적은 양의 코드만을 이용해서 섬네일을 제작할 수 있고, 가로와 세로 사이즈를 결정하면 비율에 맞게 조정해 주는 기능이 제공된다.             
+
+build.gradle 파일에 Thumbnailator를 추가한다.       
+
+```
+	implementation 'net.coobird:thumbnailator:0.4.16'
+    이미 추가되어 있다. 버전 문제로 작성자가 모두 추가해서 게시한 듯 하다.
+```
+
+UploadController에서는 net.coobird.thumbnailator.Thumbnailator를 import하고 try~catch 부분의 코드는 다음과 같이 변경한다.        
+
+```java
+UploadController내 uploadFile()의 일부
+
+        try {
+        uploadFile.transferTo(savePath);
+
+        String thumbnailSaveName = uploadPath + File.separator + folderPath + File.separator +
+        "s_" + uuid + "_" + fileName;
+
+        File thumbnailFile = new File(thumbnailSaveName);
+
+        Thumbnailator.createThumbnail(savePath.toFile(), thumbnailFile,100,100);
+
+        resultDTOList.add(new UploadResultDTO(fileName, uuid, folderPath));
+        } catch (IOException e) {
+        e.printStackTrace();
+        }
+```
+
+코드의 변경은 3라인 정도이고 가로나 세로가 100px 사이즈의 섬네일을 생성하도록 처리한다.           
+브라우저에서 파일을 업로드하고 나면 아래 그림처럼 동일한 이미지가 원본 이미지와 섬네일 파일이 생성되는 것을 볼 수 있다.            
+
+생성된 섬네일은 s_로 시작하고 파일의 크기가 매우 작은 것을 알 수 있다.      
+
+##### 브라우저에서 섬네일 처리          
+
+생성된 섬네일은 업로드된 파일과 동일한 이름에 s_가 붙은 형태이므로 구분이 어렵지 않다.           
+JSON으로 전달되는 UploadResultDTO에는 getImageURL()처럼 섬네일의 링크를 처리하기 위한 메서드를 추가한다.         
+
+```java
+@Data
+@AllArgsConstructor
+public class UploadResultDTO implements Serializable {
+    private String fileName, uuid, folderPath;
+
+    public String getImageURL(){
+        try {
+            return URLEncoder.encode(folderPath+"/"+uuid+"_"+fileName,"UTF-8");
+        }catch (UnsupportedEncodingException e){
+            e.printStackTrace();
+        }
+        return "";
+    }
+
+    public String getThumbnailURL(){
+        try {
+            return URLEncoder.encode(folderPath+"/s_"+uuid+"_"+fileName, "UTF-8");
+        }catch(UnsupportedEncodingException e){
+            e.printStackTrace();
+        }
+        return "";
+    }
+}
+```
+
+추가된 getThumbnailURL()은 getImageURL()과 거의 동일하고 중간에 s_가 추가된 형태이다.             
+uploadEx.html에서는 섬네일 이미지를 보여주도록 코드를 변경한다.           
+
+
+```html
+        function showUploadedImages(arr){
+            console.log(arr);
+            var divArea = $(".uploadResult");
+
+            for(var i = 0; i<arr.length; i++){
+                divArea.append("<img src='/display?fileName="+arr[i].thumbnailURL+"'>");
+            }
+        }
+```
+
+위의 코드를 반영하면 파일 업로드의 결과가 섬네일 이미지들만 추가되는 것을 볼 수 있다.        
+
+#### 업로드 파일 삭제          
+
+업로드된 파일의 삭제는 파일의 URL로 쉽게 처리할 수 있다.             
+파일의 URL 자체가 년/월/일/uuid_파일명 으로 구성되어 있으므로 이를 이용해서 삭제할 파일의 위치를 찾아서 삭제할 수 있다.           
+UploadController에서는 removeFile()메서드를 추가한다.          
+removeFile()은 경로와 UUID가 포함된 파일 이름을 파라미터로 받아 삭제 결과를 Boolean 타입으로 만들어서 전송한다.         
+
+```java
+UploadController 클래스 일부
+
+    @PostMapping("/removeFile")
+    public ResponseEntity<Boolean> removeFile(String fileName){
+        String srcFileName = null;
+
+        try {
+            srcFileName = URLDecoder.decode(fileName, "UTF-8");
+            File file = new File(uploadPath+File.separator+srcFileName);
+            boolean result = file.delete();
+    
+            File thumbnail = new File(file.getParent(), "s_"+file.getName());
+    
+            result = thumbnail.delete();
+    
+            return new ResponseEntity<>(result, HttpStatus.OK);
+        }catch(UnsupportedEncodingException e){
+            e.printStackTrace();
+            return new ResponseEntity<>(false, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+```
+
+removeFile()에서 주의해야 하는 것은 원본 파일과 함께 섬네일 파일도 같이 삭제해야 한다는 점이다.          
+removeFile()은 원본 파일의 이름을 파라미터로 전송받은 후에 File 객체를 이용해서 원본과 섬네일을 같이 삭제한다.         
+
+##### 브라우저에서 파일 삭제             
+
+브라우저에서는 각 파일을 삭제할 수 있도록 버튼을 추가하고, 버튼과 이미지를 하나의 < div >로 묶는 작업이 필요하다.          
+이를 통해서 한 번에 버튼과 이미지를 같이 삭제할 수 있도록 처리할 수 있다.          
+업로드된 결과를 처리하는 부분은 버튼을 추가하도록 다음과 같이 수정한다.         
+
+```html
+uploadEx.html 일부
+
+        function showUploadedImages(arr){
+            console.log(arr);
+            var divArea = $(".uploadResult");
+
+            var str = "";
+
+            for(var i = 0; i<arr.length; i++){
+                str += "<div>";
+                str += "<img src='/display?fileName="+arr[i].thumbnailURL+"'>";
+                str += "<button class='removeBtn' data-name='"+arr[i].imageURL+"'>REMOVE</button>"
+                str += "</div>";
+            }
+            divArea.append(str);
+        }
+```
+
+함수 내부에서는 < div > 태그를 생성하고, < img > 와 < button > 태그를 < div > 안쪽으로 추가한다.           
+추가된 < button > 태그는 data-name이라는 커스텀 속성을 지정해서 버튼을 클릭했을 때 삭제해야 하는 파일의 이름을 알아내는 용도로 사용한다.           
+브라우저에서 파일을 업로드하면 버튼이 추가되는 것을 확인할 수 있고, 서버에서는 원본과 섬네일 파일이 생성된 것을 확인할 수 있다.          
+
+화면에서 REMOVE 버튼을 클릭하면 동작하는 부분은 다음과 같이 작성한다.           
+
+```html
+uploadEx.html 일부
+
+$(".uploadResult").on("click", ".removeBtn", function(e){
+    var target = $(this);
+    var fileName = target.data("name");
+    var targetDiv = $(this).closest("div");
+    
+    console.log(fileName);
+    
+    $.post('/removeFile', {fileName: fileName}, function(result){
+        console.log(result);
+        if(result === true){
+            targetDiv.remove();
+        }
+    })
+});
+```
+
+업로드 결과로 만들어지는 < div >는 동적으로 생성되기 때문에 바로 클릭 이벤트 처리를 할 수 없으므로, 위임delegate 하는 방식으로 이벤트를 처리한다.            
+삭제 작업은 POST 방식으로 호출하고 정상적으로 서버에서 원본 파일과 섬네일 파일이 삭제된 후에는 화면에서 해당 이미지가 포함된 < div >를 삭제한다.            
+
+> 최근에는 파일 업로드 자체를 클라우드를 이용해서 처리하는 경우도 많다.      
+> 예를 들어 AWS의 S3의 경우가 가장 대표적이다.           
